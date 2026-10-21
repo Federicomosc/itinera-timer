@@ -1,0 +1,48 @@
+# Il timer degli avvisi di Itinera.
+#
+# Ogni cinque minuti bussa a /api/uscite: il server guarda i viaggi in corso e
+# manda al gruppo «è ora di uscire» e le novità sui voli. Qui non c'è nessun
+# dato, solo la sveglia: i cron di Vercel, sul piano gratuito, passano una
+# volta al giorno, e GitHub Actions è gratis solo per i progetti pubblici.
+#
+# GitHub ferma i timer di un progetto fermo da 60 giorni: una volta al mese il
+# timer lascia un segno nel registro (keepalive), così non si spegne.
+
+name: timer
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+    - cron: '17 4 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: timer
+  cancel-in-progress: false
+
+jobs:
+  uscite:
+    if: github.event.schedule != '17 4 1 * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Avvisi di uscita e voli
+        run: curl -fsS --max-time 60 https://itinera-ten.vercel.app/api/uscite
+
+  keepalive:
+    if: github.event.schedule == '17 4 1 * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Un segno al mese
+        run: |
+          date -u +%Y-%m-%dT%H:%M:%SZ > ultimo-giro.txt
+          git config user.name 'itinera-timer'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ultimo-giro.txt
+          git commit -m 'Il timer è ancora sveglio'
+          git push
